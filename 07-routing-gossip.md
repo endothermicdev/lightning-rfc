@@ -29,6 +29,7 @@ To support channel and node discovery, three *gossip messages* are supported:
   * [The `channel_update` Message](#the-channel_update-message)
   * [Query Messages](#query-messages)
   * [Initial Sync](#initial-sync)
+  * [Set Reconciliation](#set-reconciliation)
   * [Rebroadcasting](#rebroadcasting)
   * [HTLC Fees](#htlc-fees)
   * [Pruning the Network View](#pruning-the-network-view)
@@ -1047,9 +1048,9 @@ because of the limited 64bits per minisketch entry, collisions between node_ids
 would be possible. To avoid this, channel id and side are instead used to
 describe the intended node.
 
-Using the lexicographically least `short_channel_id` of a node allows the oldest channel to
-identify a node, potentially reducing the necessary frequency of recalculating
-node announcement sketch entries.
+Using the lexicographically least `short_channel_id` of a node allows the oldest
+channel to identify a node, potentially reducing the necessary frequency of
+recalculating node announcement sketch entries.
 
 ## Rebroadcasting
 
