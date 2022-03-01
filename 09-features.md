@@ -42,7 +42,8 @@ The Context column decodes as follows:
 | 22/23 | `option_anchors_zero_fee_htlc_tx` | Anchor commitment type with zero fee HTLC transactions   | IN       | `option_static_remotekey` | [BOLT #3][bolt03-htlc-tx], [lightning-dev][ml-sighash-single-harmful]|
 | 26/27 | `option_shutdown_anysegwit`         | Future segwit versions allowed in `shutdown`              | IN       |                   | [BOLT #2][bolt02-shutdown]   |
 | 44/45 | `option_channel_type`            | Node supports the `channel_type` field in open/accept     | IN       |                   | [BOLT #2](02-peer-protocol.md#the-open_channel-message) |
-| 48/49 | `option_payment_metadata` | Payment metadata in tlv record | 9 | | [BOLT #11](11-payment-encoding.md#tagged-fields)
+| 48/49 | `option_payment_metadata` | Payment metadata in tlv record | 9 | | [BOLT #11](11-payment-encoding.md#tagged-fields)|
+| 100/101 | `option_gossip_set_reconciliation` | Node can receive gossip minisketch packets            | IN       |                   | [BOLT #7][bolt07-set-reconciliation] |
 
 ## Definitions
 
@@ -93,5 +94,6 @@ This work is licensed under a [Creative Commons Attribution 4.0 International Li
 [bolt04]: 04-onion-routing.md
 [bolt07-sync]: 07-routing-gossip.md#initial-sync
 [bolt07-query]: 07-routing-gossip.md#query-messages
+[bolt07-set-reconciliation]: 07-routing-gossip.md#set-reconciliation
 [bolt04-mpp]: 04-onion-routing.md#basic-multi-part-payments
 [ml-sighash-single-harmful]: https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-September/002796.html

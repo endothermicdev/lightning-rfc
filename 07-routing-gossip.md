@@ -538,14 +538,14 @@ makes sense to have it be a UNIX timestamp (i.e. seconds since UTC
 1970-01-01). This cannot be a hard requirement, however, given the possible case
 of two `channel_update`s within a single second.
 
-It is assumed that more than one `channel_update` message changing the channel 
-parameters in the same second may be a DoS attempt, and therefore, the node responsible 
-for signing such messages may be blacklisted. However, a node may send a same 
-`channel_update` message with a different signature (changing the nonce in signature 
-signing), and hence fields apart from signature are checked to see if the channel 
-parameters have changed for the same timestamp. It is also important to note that 
-ECDSA signatures are malleable. So, an intermediate node who received the `channel_update` 
-message can rebroadcast it just by changing the `s` component of signature with `-s`. 
+It is assumed that more than one `channel_update` message changing the channel
+parameters in the same second may be a DoS attempt, and therefore, the node responsible
+for signing such messages may be blacklisted. However, a node may send a same
+`channel_update` message with a different signature (changing the nonce in signature
+signing), and hence fields apart from signature are checked to see if the channel
+parameters have changed for the same timestamp. It is also important to note that
+ECDSA signatures are malleable. So, an intermediate node who received the `channel_update`
+message can rebroadcast it just by changing the `s` component of signature with `-s`.
 This should however not result in the blacklist of the `node_id` from where
 the message originated.
 
@@ -912,6 +912,140 @@ A node:
       - SHOULD resume normal operation, as specified in the following
       [Rebroadcasting](#rebroadcasting) section.
 
+## Set Reconciliation
+
+The option `gossip_minisketch` enables set reconciliation of gossip.  This is a
+bandwidth-efficient way for nodes, once synchronized with peers, to maintain
+synchronization.
+
+Set data of `sketch` is serialized according to libminisketch.<sup>[3](#reference-3)</sup>
+
+By creating a minisketch of all known current gossip and periodically
+transmitting the sketch to peers, a peer is able to respond with only that
+gossip which is originating node is missing. Compared to naive flooding, this
+reduces bandwidth and encourages gossip with additional peers.
+
+Nodes can signal support for gossip set reconciliation with the
+`option_gossip_set_reconciliation` feature bit set.
+
+1. type: 267 (`gossip_set`)(`gossip_minisketch`)
+2. data:
+    * [`chain_hash`:`chain_hash`]
+    * [`u32`:`number_of_entries`]
+    * [`u32`:`number_of_channel_announcements`]
+    * [`u32`:`number_of_node_announcements`]
+    * [`u32`:`number_of_channel_updates`]
+    * [`u16`:`sketch_len`]
+    * [`sketch_len*byte`:`sketch`]
+    * [`u16`:`num_raw`]
+    * [`num_raw*raw_scid_info`:`raw`]
+    * [`u16`:`num_channels_excluded`]
+    * [`num_channels_excluded*short_channel_id`:`excluded_channels`]
+    * [`u16`:`num_nodes_excluded`]
+    * [`num_nodes_excluded*node_id`:`excluded_nodes`]
+3. subtype: `raw_scid_info`
+4. data:
+    * [`short_channel_id`:`short_channel_id`]
+    * [`byte`:`raw_flags`]
+    * [`u32`:`timestamp`]
+    * [FIXME: encode raw so we can use SCID for node announcements]
+
+Each minisketch gossip entry is encoded in 64 bits in the following manner:
+  1. The two lowest bits, N0, specify gossip type:
+    * 0 for channel_announcement
+    * 1 for channel_update
+    * 2 for node_announcement
+  2. The next lowest bit, N1, specifies the channel side of the gossip.
+    * In the case of a channel announcement, bit N1 is ignored.
+    * In the case of a channel update, N1 refers to the `direction` bit of the
+      channel update message.
+    * In the case of a node announcement, N1=0 indicates that the entry refers
+      to node_id_1 of the described channel. N1=1 refers to node_id_2.
+  3. The next lowest N3=24 bits encode the block height of the channel's
+     funding transaction.
+  4. The next lowest N4=15 bits encode the transaction index of the funding
+     transaction.
+  5. The next lowest N5=10 bits are the output index of the funds consumed by
+     the funding transaction.
+  6. The remaining N6=12 bits encode the gossip timestamp in the form:
+     timestamp % ((2^N6)-1)
+
+The `raw_flags` bitfield is used to indicate the type of gossip message.
+
+| Bit Position  | Meaning                        |
+| ------------- | ------------------------------ |
+| 0             | `channel_announcement`         |
+| 1             | `channel_update` for node 1    |
+| 2             | `channel_update` for node 2    |
+| 3             | `node_announcement` for node 1 |
+| 4             | `node_announcement` for node 2 |
+
+### Requirements
+
+A node:
+  - MUST encode `sketch` with minisketch implementation 0.
+  - when a public channel is closed:
+    - if the channel is the lexicographically least public
+      `short_channel_id` belonging to either node:
+      - MUST remove the existing node_announcement `sketch` entry corresponding
+        to that node.
+      - if that node has additional channels:
+        - MUST create a new channel announcement `sketch` entry corresponding to
+          that node with the next lexicographically least public
+          `short_channel_id`.
+    - MUST remove the corresponding `channel_announcement` and `channel_update`
+      entries from the node's `sketch`.
+
+A sending node:
+  - MUST set `number_of_entries` to the number of entries in `sketch`.
+  - MUST set `number_of_channel_announcements` to the number of channel
+    announcements in `sketch`.
+  - MUST set `number_of_node_announcements` to the number of  node announcement
+    in `sketch`.
+  - MUST set `number_of_channel_updates` to the number of channel updates in
+    `sketch`.
+  - MUST set `sketch_len` to the length (bytes) of `sketch`.
+
+  - When adding a node announcement entry to `sketch`:
+    - MUST reference a node by the lexicographically least public
+      `short_channel_id` belonging to that node.
+    - MUST NOT include more than one sketch entry per node_announcement
+  - MUST set `sketch` and `raw` to contain all encoded gossip as follows:
+    - if the channel's transaction index is less than 32768 and the output index
+      is less than 1024:
+        - MUST encode the gossip as a minisketch entry.
+    - otherwise:
+      - MUST include the gossip in `raw_scid_info`
+  - MUST NOT include any `excluded_channels` or `excluded_nodes` in `sketch`.
+  - for each peer signaling set reconciliation support:
+    - MAY transmit a `gossip_minisketch` every 60s.
+
+A receiving node:
+  - MAY abort processing a `gossip_minisketch` if the minimum sketch capacity
+    between the local or received `sketch` is greater than the difference in
+    `number_of_entries` between the received and local gossip sets.
+  - MUST apply all `excluded_channels` and `excluded_nodes` to a sketch before
+    merging local and remote sketches.
+  - SHOULD merge a received `sketch` with a local sketch and deserialize the
+    result.  Of the decoded, merged sketch result:
+    - if an entry is contained in the local sketch:
+      - SHOULD transmit in response the current, corresponding gossip packet.
+    - otherwise, SHOULD ignore the sketch entry.
+
+### Rationale
+
+64 bit data encodes efficiently in minisketch and allows a complete encoding of
+a `short_channel_id` under most circumstances.
+
+Node announcements would ideally refer to `node_id` directly, however,
+because of the limited 64bits per minisketch entry, collisions between node_ids
+would be possible. To avoid this, channel id and side are instead used to
+describe the intended node.
+
+Using the lexicographically least SCID of a node allows the oldest channel to
+identify a node, potentially reducing the necessary frequency of recalculating
+node announcement sketch entries.
+
 ## Rebroadcasting
 
 ### Requirements
@@ -1133,6 +1267,7 @@ above.
 
 1. <a id="reference-1">[RFC 1950 "ZLIB Compressed Data Format Specification version 3.3](https://www.ietf.org/rfc/rfc1950.txt)</a>
 2. <a id="reference-2">[Maximum Compression Factor](https://zlib.net/zlib_tech.html)</a>
+3. <a id="reference-3"[Minisketch: a library for BCH-based set reconciliation](https://github.com/sipa/minisketch)</a>
 
 ![Creative Commons License](https://i.creativecommons.org/l/by/4.0/88x31.png "License CC-BY")
 <br>
