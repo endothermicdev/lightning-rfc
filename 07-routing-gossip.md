@@ -925,6 +925,12 @@ transmitting the sketch to peers, a peer is able to respond with only that
 gossip which is originating node is missing. Compared to naive flooding, this
 reduces bandwidth and encourages gossip with additional peers.
 
+Each node maintains a minisketch of current gossip. Two minisketches of same
+field size can be compared to extract the differences, so gossip can be
+selectively transmitted based on identified deficiency. Since any minisketch can
+be truncated to a lesser size, the size of minisketch sent does not have to be
+dictated by the specification.
+
 Nodes can signal support for gossip set reconciliation with the
 `option_gossip_set_reconciliation` feature bit set.
 
@@ -948,7 +954,6 @@ Nodes can signal support for gossip set reconciliation with the
     * [`short_channel_id`:`short_channel_id`]
     * [`byte`:`raw_flags`]
     * [`u32`:`timestamp`]
-    * [FIXME: encode raw so we can use SCID for node announcements]
 
 Each minisketch gossip entry is encoded in 64 bits in the following manner:
   1. The two lowest bits, N0, specify gossip type:
@@ -1042,7 +1047,7 @@ because of the limited 64bits per minisketch entry, collisions between node_ids
 would be possible. To avoid this, channel id and side are instead used to
 describe the intended node.
 
-Using the lexicographically least SCID of a node allows the oldest channel to
+Using the lexicographically least `short_channel_id` of a node allows the oldest channel to
 identify a node, potentially reducing the necessary frequency of recalculating
 node announcement sketch entries.
 
