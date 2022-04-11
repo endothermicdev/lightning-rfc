@@ -967,13 +967,13 @@ Each minisketch gossip entry is encoded in 64 bits in the following manner:
       channel update message.
     * In the case of a node announcement, N1=0 indicates that the entry refers
       to node_id_1 of the described channel. N1=1 refers to node_id_2.
-  3. The next lowest N3=24 bits encode the block height of the channel's
+  3. The next lowest N2=24 bits encode the block height of the channel's
      funding transaction.
-  4. The next lowest N4=15 bits encode the transaction index of the funding
+  4. The next lowest N3=15 bits encode the transaction index of the funding
      transaction.
-  5. The next lowest N5=10 bits are the output index of the funds consumed by
+  5. The next lowest N4=10 bits are the output index of the funds consumed by
      the funding transaction.
-  6. The remaining N6=12 bits encode the gossip timestamp in the form:
+  6. The remaining N5=12 bits encode the gossip timestamp in the form:
      timestamp % ((2^N6)-1)
 
 The `raw_flags` bitfield is used to indicate the type of gossip message.
