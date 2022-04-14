@@ -992,6 +992,9 @@ The `raw_flags` bitfield is used to indicate the type of gossip message.
 
 A node:
   - MUST encode `sketch` with minisketch implementation 0.
+  - MUST NOT replace a sketch entry in the minisketch if block_height << 5 of
+    the new gossip is not incremented by at least 1 relative to the existing
+    entry.
   - when a public channel is closed:
     - if the channel is the lexicographically least public
       `short_channel_id` belonging to either node:
@@ -1034,7 +1037,7 @@ A receiving node:
     `number_of_entries` between the received and local gossip sets.
   - MUST apply all `excluded_channels` and `excluded_nodes` to a sketch before
     merging local and remote sketches.
-  - SHOULD merge a received `sketch` with a local sketch and deserialize the
+  - SHOULD merge a received `sketch` with a local `sketch` and deserialize the
     result.  Of the decoded, merged sketch result:
     - if an entry is contained in the local sketch:
       - SHOULD transmit in response the current, corresponding gossip packet.
@@ -1053,6 +1056,11 @@ describe the intended node.
 Using the lexicographically least `short_channel_id` of a node allows the oldest
 channel to identify a node, potentially reducing the necessary frequency of
 recalculating node announcement sketch entries.
+
+Encoding the block height of the gossip message allows all nodes to apply a
+consistent rate-limiting rule independently of local timestamps or local age of
+a gossip message.  This consistent rate-limit policy is required to keep sets
+in sufficient consensus for set reconciliation.
 
 ## Rebroadcasting
 
